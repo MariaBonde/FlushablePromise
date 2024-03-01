@@ -73,9 +73,6 @@ export default class FlushablePromise<T,U=T> {
 }
 
 
-
-
-
 let f_promise_1 = new FlushablePromise<number>(()=>32);//flushing function is then ()=>32
 let f_promise_2 = f_promise_1.then((x => x*2));
 f_promise_1.then((x => console.log("promise 1: " + x)));
