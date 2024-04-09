@@ -26,4 +26,3 @@ To test the code in [src/FlushablePromise.js](https://github.com/MariaBonde/Flus
 ```console
 node lib/FlushablePromise.js  
 ```
-test
