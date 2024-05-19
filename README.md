@@ -26,3 +26,14 @@ To test the code in [src/FlushablePromise.js](https://github.com/MariaBonde/Flus
 ```console
 node lib/FlushablePromise.js  
 ```
+
+## Unit Testing
+We have chosen `jest` as the unit testing framework to test the outcomes of the methods of the `FlushablePromise` class. First we need to install `jest`
+```console
+npm install --save-dev jest
+```
+
+To run the tests, simply run
+```console
+npm test
+```
