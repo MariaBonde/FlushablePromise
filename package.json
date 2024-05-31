@@ -7,7 +7,7 @@
     "scripts": {
         "flow": "flow",
         "build": "babel src/ -d lib/",
-        "build_typescript": "npx tsc",
+        "build_ts": "npx tsc",
         "prepublish": "yarn run build",
         "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
     },
