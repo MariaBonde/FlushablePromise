@@ -1,9 +1,9 @@
-// @flow
+import AggregateError from "aggregate-error";
 
 export default class FlushablePromise<T> {
   _promise: Promise<T>;
-  resolve: (T) => void;
-  reject: (any) => void;
+  resolve: (x: T) => void;
+  reject: (x: any) => void;
   _fetchValue: () => T;
   _sourcePromise: FlushablePromise<any>[];
 
@@ -11,29 +11,32 @@ export default class FlushablePromise<T> {
    * @param onFlush: Function returning the value the promise should resolve with when ``flush`` is called
    */
   constructor(onFlush?: () => T) {
-    let { promise, resolve, reject } = Promise.withResolvers();
-    [this._promise, this.resolve, this.reject] = [promise, resolve, reject];
+    this._promise = new Promise((resolve, reject) => {
+      this.resolve = (v) => {
+        resolve(v);
+      };
+      this.reject = (e) => {
+        reject(e);
+      };
+    });
     if (onFlush) {
       this._fetchValue = onFlush;
     }
   }
 
-  get promise(): Promise<T> {
-    return this._promise;
-  }
-
   /**
    * Method to chain a promise with fulfill- and reject-reactions.
    *
-   * @param onFulfilled: The function called when the promise ``then`` is called on gets resolved. Returns the value the new promise gets resolved with.
-   * @param onRejected: The function called when the promise ``then`` is called on is rejected. Returns the value the new promise gets rejected with.
+   * @param onFulfilled: The function executed when the promise ``then`` is called on gets resolved. Returns the value the new promise gets resolved with.
+   * @param onRejected: The function executed when the promise ``then`` is called on is rejected. Returns the value the new promise gets rejected with.
    * @returns a new promise dependent on the promise ``then``was called on
    */
-  then<ResolveType = T, RejectType = empty>(
-    onFulfilled: (T) => ResolveType,
-    onRejected?: (any) => RejectType
+  then<ResolveType = T, RejectType = never>(
+    onFulfilled: (a: T) => ResolveType,
+    onRejected?: (a: any) => RejectType
   ): FlushablePromise<ResolveType | RejectType> {
-    let newPromise = new FlushablePromise<ResolveType | RejectType>();
+    var newPromise = new FlushablePromise<ResolveType | RejectType>();
+
     newPromise._setSourcePromise(this);
 
     this._promise.then(
@@ -92,6 +95,7 @@ export default class FlushablePromise<T> {
     } else {
       return this.then(
         (value) => FlushablePromise.resolve(onFinally()).then(() => value),
+
         (reason) =>
           FlushablePromise.resolve(onFinally()).then(() => {
             throw reason;
@@ -116,7 +120,7 @@ export default class FlushablePromise<T> {
    *
    * @param sourcePromise: The preceding promise in a promise chain
    */
-  _setSourcePromise(sourcePromise: FlushablePromise<any>): void {
+  private _setSourcePromise(sourcePromise: FlushablePromise<any>): void {
     this._sourcePromise = [sourcePromise];
   }
 
@@ -125,7 +129,7 @@ export default class FlushablePromise<T> {
    *
    * @param sourcePromise
    */
-  _setSourcePromises(sourcePromise: FlushablePromise<any>[]): void {
+  private _setSourcePromises(sourcePromise: FlushablePromise<any>[]): void {
     if (!this._sourcePromise) {
       this._sourcePromise = sourcePromise;
     } else {
@@ -143,6 +147,7 @@ export default class FlushablePromise<T> {
     let counter: number = promiseList.length;
     let arr = [];
     let promise = new FlushablePromise<any[]>();
+
     promise._setSourcePromises(promiseList);
     for (let i = 0; i < counter; i++) {
       promiseList[i].then(
@@ -166,6 +171,7 @@ export default class FlushablePromise<T> {
    */
   static race(promiseList: FlushablePromise<any>[]): FlushablePromise<any> {
     let promise = new FlushablePromise<any>();
+
     promise._setSourcePromises(promiseList);
     promiseList.forEach((p) =>
       p.then(
@@ -184,6 +190,7 @@ export default class FlushablePromise<T> {
    */
   static any(promiseList: FlushablePromise<any>[]): FlushablePromise<any> {
     let promise = new FlushablePromise<any>();
+
     let rejects = [];
     promise._setSourcePromises(promiseList);
     promiseList.forEach((p) =>
@@ -212,6 +219,7 @@ export default class FlushablePromise<T> {
       return value;
     }
     let promise = new FlushablePromise<any>();
+
     promise.resolve(value);
     return promise;
   }
@@ -224,6 +232,7 @@ export default class FlushablePromise<T> {
    */
   static reject(value: any): FlushablePromise<any> {
     let promise = new FlushablePromise<any>();
+
     promise.reject(value);
     return promise;
   }
