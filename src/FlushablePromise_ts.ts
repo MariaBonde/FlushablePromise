@@ -1,17 +1,17 @@
 import AggregateError from "aggregate-error";
 
 export default class FlushablePromise<T> {
-  _promise: Promise<T>;
-  resolve: (x: T) => void;
-  reject: (x: any) => void;
-  _fetchValue: () => T;
-  _sourcePromise: FlushablePromise<any>[];
+  private promise: Promise<T>;
+  public resolve: (x: T) => void;
+  public reject: (x: any) => void;
+  private fetchValue: () => T;
+  private precedingPromises: FlushablePromise<any>[];
 
   /**
    * @param onFlush: Function returning the value the promise should resolve with when ``flush`` is called
    */
   constructor(onFlush?: () => T) {
-    this._promise = new Promise((resolve, reject) => {
+    this.promise = new Promise((resolve, reject) => {
       this.resolve = (v) => {
         resolve(v);
       };
@@ -20,8 +20,9 @@ export default class FlushablePromise<T> {
       };
     });
     if (onFlush) {
-      this._fetchValue = onFlush;
+      this.fetchValue = onFlush;
     }
+    this.precedingPromises = []
   }
 
   /**
@@ -37,14 +38,14 @@ export default class FlushablePromise<T> {
   ): FlushablePromise<ResolveType | RejectType> {
     var newPromise = new FlushablePromise<ResolveType | RejectType>();
 
-    newPromise._setSourcePromise(this);
+    newPromise.setPrecedingPromise(this);
 
-    this._promise.then(
+    this.promise.then(
       (x) => {
         let fulfilledVal = onFulfilled(x);
         if (fulfilledVal instanceof FlushablePromise) {
-          fulfilledVal._setSourcePromise(this);
-          newPromise._setSourcePromise(fulfilledVal);
+          fulfilledVal.setPrecedingPromise(this);
+          newPromise.setPrecedingPromise(fulfilledVal);
           fulfilledVal.resolve(x);
           return newPromise.resolve(fulfilledVal);
         } else {
@@ -55,8 +56,8 @@ export default class FlushablePromise<T> {
         if (onRejected) {
           let rejectedVal = onRejected(y);
           if (rejectedVal instanceof FlushablePromise) {
-            rejectedVal._setSourcePromise(this);
-            newPromise._setSourcePromise(rejectedVal);
+            rejectedVal.setPrecedingPromise(this);
+            newPromise.setPrecedingPromise(rejectedVal);
             rejectedVal.reject(y);
             return newPromise.resolve(rejectedVal);
           } else {
@@ -105,37 +106,37 @@ export default class FlushablePromise<T> {
   }
 
   /**
-   * Method to flush promise chain, will resolve promise with ``onFlush`` function, or call itself recursively on the source promise.
+   * Method to flush promise chain, will resolve promise with ``onFlush`` function, or call itself recursively on the preceding promise.
    */
   flush(): void {
-    if (this._fetchValue) {
-      this.resolve(this._fetchValue());
-    } else if (this._sourcePromise) {
-      this._sourcePromise.forEach((flushable) => flushable.flush());
-    }
-  }
-
-  /**
-   * Method to set source promise(s) of new promise.
-   *
-   * @param sourcePromise: The preceding promise in a promise chain
-   */
-  private _setSourcePromise(sourcePromise: FlushablePromise<any>): void {
-    this._sourcePromise = [sourcePromise];
-  }
-
-  /**
-   * Method to add new source promises to existing source promises.
-   *
-   * @param sourcePromise
-   */
-  private _setSourcePromises(sourcePromise: FlushablePromise<any>[]): void {
-    if (!this._sourcePromise) {
-      this._sourcePromise = sourcePromise;
+    if (this.fetchValue) {
+      this.resolve(this.fetchValue());
     } else {
-      this._sourcePromise = this._sourcePromise.concat(sourcePromise);
+      this.precedingPromises.forEach((flushable) => flushable.flush());
     }
   }
+
+  /**
+   * Method to set preceding promise(s) of new promise.
+   *
+   * @param precedingPromise: The preceding promise in a promise chain
+   */
+  private setPrecedingPromise(precedingPromise: FlushablePromise<any>): void {
+    this.precedingPromise=precedingPromise;
+  }
+
+  /**
+   * Method to add new preceding promises to existing preceding promises.
+   *
+   * @param precedingPromise
+   */
+  private setPrecedingPromises(precedingPromise: FlushablePromise<any>[]): void {
+    if (!this.precedingPromises) {
+      this.precedingPromises = precedingPromise;
+    } else {
+      this.precedingPromises = this.precedingPromises.concat(precedingPromise);
+    }
+  } 
 
   /**
    * Method to resolve a promise with the values of several promises once they are resolved.
@@ -148,7 +149,7 @@ export default class FlushablePromise<T> {
     let arr = [];
     let promise = new FlushablePromise<any[]>();
 
-    promise._setSourcePromises(promiseList);
+    promise.setPrecedingPromises(promiseList)
     for (let i = 0; i < counter; i++) {
       promiseList[i].then(
         (v) => {
@@ -172,7 +173,7 @@ export default class FlushablePromise<T> {
   static race(promiseList: FlushablePromise<any>[]): FlushablePromise<any> {
     let promise = new FlushablePromise<any>();
 
-    promise._setSourcePromises(promiseList);
+    promise.setPrecedingPromises(promiseList)
     promiseList.forEach((p) =>
       p.then(
         (v) => promise.resolve(v),
@@ -192,7 +193,7 @@ export default class FlushablePromise<T> {
     let promise = new FlushablePromise<any>();
 
     let rejects = [];
-    promise._setSourcePromises(promiseList);
+    promise.setPrecedingPromises(promiseList)
     promiseList.forEach((p) =>
       p.then(
         (v) => promise.resolve(v),
@@ -237,3 +238,35 @@ export default class FlushablePromise<T> {
     return promise;
   }
 }
+/* let f_promise_1 = new FlushablePromise<number>(() => 32); //flushing function is then ()=>
+
+let f_promise_2 = f_promise_1.then((x) => x * 2);
+let f_promise_3 = f_promise_2.then((x) => x + "px");
+f_promise_1.then((x) => console.log("promise 1: " + x));
+f_promise_2.then((x) => console.log("promise 2: " + x));
+f_promise_3.then((x) => console.log("promise 3: " + x));
+setTimeout(() => f_promise_1.resolve(16), 5000);
+setTimeout(() => f_promise_3.flush(), 1000); */
+  
+
+//testing for all
+let p1 = new FlushablePromise<number>(()=>3)
+
+let p2 = new FlushablePromise<string>(()=>"hei")
+
+let p3 = new FlushablePromise<[string]>(()=>["nei"])
+
+
+
+let p4 = FlushablePromise.all([p1,p2,p3])
+
+setTimeout(()=>{
+  p1.resolve(1)
+p2.resolve("h")
+p3.resolve(['h'])
+},3000)
+
+let p5 = p4.then((x)=>{console.log("p4: "+x);return x})
+setTimeout(()=>{
+  p5.flush()
+},1000)
